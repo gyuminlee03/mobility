@@ -1,0 +1,76 @@
+import numpy as np
+import cv2 as cv
+from matplotlib import pyplot as plt
+
+# 왼쪽 및 오른쪽 이미지를 그레이스케일로 읽어옵니다.
+# cv2의 imread 함수를 사용하여 왼쪽 이미지와 오른쪽 이미지를 그레이스케일로 불러옵니다.
+# 이 이미지는 스테레오 매칭을 위한 입력 데이터입니다.
+imgL = cv.imread('./data/left.png', cv.IMREAD_GRAYSCALE)  # 왼쪽 이미지
+imgR = cv.imread('./data/right.png', cv.IMREAD_GRAYSCALE)  # 오른쪽 이미지
+
+# 이미지의 높이와 너비를 가져옵니다.
+# 두 이미지는 동일한 크기를 가지고 있어야 합니다.
+height, width = imgL.shape
+
+# 최대 Disparity 범위를 설정합니다.
+# Disparity는 두 이미지 간의 시차를 의미하며, 최대 범위를 64로 설정합니다.
+max_disparity = 64
+
+# Disparity 맵을 저장할 배열을 생성합니다.
+# 최종적으로 계산된 disparity 값을 저장할 2D 배열을 생성합니다.
+# 데이터 타입은 float32로 설정합니다.
+disparity = np.zeros((height, width), dtype=np.float32)
+
+# SAD (Sum of Absolute Differences) 함수를 정의합니다.
+# 이 함수는 두 이미지의 블록 간 차이를 계산하여 반환합니다.
+def sad(I1, I2, x, y, d, block_size):
+    half_block = block_size // 2  # 블록 크기의 절반을 계산합니다.
+    sad_value = 0  # SAD 값을 초기화합니다.
+
+    # 블록의 경계를 확인하여 유효성 검사
+    # 블록의 각 픽셀에 대해 차이를 계산합니다.
+    for i in range(-half_block, half_block + 1):
+        for j in range(-half_block, half_block + 1):
+            # 경계를 넘어가지 않도록 검사합니다.
+            if (0 <= y + j < height) and (0 <= x + i < width) and (0 <= x + i - d < width):
+                # SAD 값을 계산합니다.
+                sad_value += abs(int(I1[y + j, x + i]) - int(I2[y + j, x + i - d]))
+
+    return sad_value  # 계산된 SAD 값을 반환합니다.
+
+# 각 픽셀에 대해 Disparity를 계산합니다.
+# 두 이미지의 모든 픽셀을 순회하며 최적의 disparity 값을 찾습니다.
+for y in range(height):
+    for x in range(width):
+        best_disparity = 0  # 현재 픽셀에 대한 최적의 disparity 값을 초기화합니다.
+        best_sad = float('inf')  # 가장 작은 SAD 값을 초기화합니다.
+
+        # Disparity 값 0부터 max_disparity까지 반복합니다.
+        for d in range(max_disparity):
+            # SAD 값을 계산합니다.
+            sad_value = sad(imgL, imgR, x, y, d, block_size=5)
+
+            # 현재 SAD 값이 가장 낮은 경우를 찾습니다.
+            if sad_value < best_sad:
+                best_sad = sad_value  # 가장 작은 SAD 값을 업데이트합니다.
+                best_disparity = d  # 최적의 disparity 값을 업데이트합니다.
+
+        # 최적의 Disparity 값을 저장합니다.
+        disparity[y, x] = best_disparity
+
+# Disparity 맵을 정규화합니다.
+# OpenCV의 normalize 함수를 사용하여 disparity 맵을 0과 255 사이의 값으로 변환합니다.
+# 이렇게 하면 시각적으로 쉽게 표현할 수 있습니다.
+disparity = cv.normalize(disparity, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
+
+# Disparity 맵을 컬러맵으로 변환합니다.
+# OpenCV의 applyColorMap 함수를 사용하여 disparity 맵에 컬러맵을 적용합니다.
+# 이렇게 하면 깊이 정보를 시각적으로 더 잘 전달할 수 있습니다.
+disparity_colormap = cv.applyColorMap(disparity, cv.COLORMAP_JET)
+
+# 결과를 출력합니다.
+# matplotlib의 imshow 함수를 사용하여 컬러맵으로 변환된 disparity 맵을 출력합니다.
+plt.imshow(disparity_colormap)
+plt.title('Disparity Map')  # 그래프의 제목을 설정합니다.
+plt.axis('off')  # 축을 숨겨서 결과를 보기 좋게 만듭니다.
+plt.show()  # 그래프를 표시합니다.
